@@ -1,84 +1,200 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Chess } from 'chess.js';
 
-const slogans = [
-  "Turn chats into apps",
-  "Prompt. Ship. Repeat.",
-  "Build anything from a chat",
-  "Ideas → Apps, instantly",
-  "From zero to MVP in minutes",
-  "Your cofounder in the command line",
-  "Draft, iterate, deploy",
-  "Ship faster than you can type",
-  "Design in text, deliver in code",
-  "Dream it. Prompt it. Run it.",
-  "Chat-native app building",
-  "From prompt to product",
-  "One prompt, infinite apps",
-  "Stop scaffolding. Start shipping.",
-  "Prototype at the speed of thought",
-  "Make conversations executable"
-];
+type Square = string;
+type PieceType = 'p' | 'n' | 'b' | 'r' | 'q' | 'k';
+type PieceColor = 'w' | 'b';
 
-export default function Landing() {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isVisible, setIsVisible] = useState(true);
+interface ChessPiece {
+  type: PieceType;
+  color: PieceColor;
+}
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setIsVisible(false);
-      setTimeout(() => {
-        setCurrentIndex((prev) => (prev + 1) % slogans.length);
-        setIsVisible(true);
-      }, 400);
-    }, 2800);
+const PIECE_SYMBOLS: Record<string, string> = {
+  'wp': '♙', 'wn': '♘', 'wb': '♗', 'wr': '♖', 'wq': '♕', 'wk': '♔',
+  'bp': '♟', 'bn': '♞', 'bb': '♝', 'br': '♜', 'bq': '♛', 'bk': '♚'
+};
 
-    return () => clearInterval(interval);
-  }, []);
+export default function ChessGame() {
+  const [game, setGame] = useState<Chess>(new Chess());
+  const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
+  const [possibleMoves, setPossibleMoves] = useState<Square[]>([]);
+  const [gameOver, setGameOver] = useState(false);
+  const [winner, setWinner] = useState<string>('');
+
+  const makeComputerMove = (currentGame: Chess) => {
+    const moves = currentGame.moves();
+    if (moves.length === 0) return;
+    
+    const randomMove = moves[Math.floor(Math.random() * moves.length)];
+    currentGame.move(randomMove);
+    
+    if (currentGame.isGameOver()) {
+      setGameOver(true);
+      if (currentGame.isCheckmate()) {
+        setWinner('Computer wins!');
+      } else {
+        setWinner('Draw!');
+      }
+    }
+  };
+
+  const handleSquareClick = (square: Square) => {
+    if (gameOver) return;
+
+    const piece = game.get(square);
+    
+    if (selectedSquare) {
+      const move = {
+        from: selectedSquare,
+        to: square,
+        promotion: 'q'
+      };
+      
+      try {
+        const newGame = new Chess(game.fen());
+        newGame.move(move);
+        setGame(newGame);
+        setSelectedSquare(null);
+        setPossibleMoves([]);
+        
+        if (newGame.isGameOver()) {
+          setGameOver(true);
+          if (newGame.isCheckmate()) {
+            setWinner('You win!');
+          } else {
+            setWinner('Draw!');
+          }
+        } else {
+          setTimeout(() => {
+            const computerGame = new Chess(newGame.fen());
+            makeComputerMove(computerGame);
+            setGame(computerGame);
+          }, 300);
+        }
+      } catch (e) {
+        if (piece && piece.color === 'w') {
+          setSelectedSquare(square);
+          const moves = game.moves({ square, verbose: true });
+          setPossibleMoves(moves.map(m => m.to));
+        } else {
+          setSelectedSquare(null);
+          setPossibleMoves([]);
+        }
+      }
+    } else {
+      if (piece && piece.color === 'w') {
+        setSelectedSquare(square);
+        const moves = game.moves({ square, verbose: true });
+        setPossibleMoves(moves.map(m => m.to));
+      }
+    }
+  };
+
+  const resetGame = () => {
+    setGame(new Chess());
+    setSelectedSquare(null);
+    setPossibleMoves([]);
+    setGameOver(false);
+    setWinner('');
+  };
+
+  const renderSquare = (square: Square, piece: ChessPiece | null, rowIndex: number, colIndex: number) => {
+    const isLight = (rowIndex + colIndex) % 2 === 0;
+    const isSelected = selectedSquare === square;
+    const isPossibleMove = possibleMoves.includes(square);
+    
+    const colors = [
+      'from-pink-400 to-purple-500',
+      'from-blue-400 to-cyan-500',
+      'from-green-400 to-emerald-500',
+      'from-yellow-400 to-orange-500',
+      'from-red-400 to-pink-500',
+      'from-indigo-400 to-purple-500',
+      'from-teal-400 to-blue-500',
+      'from-orange-400 to-red-500'
+    ];
+    
+    const lightColor = colors[(rowIndex + colIndex) % colors.length];
+    const darkColor = colors[(rowIndex + colIndex + 1) % colors.length];
+    
+    return (
+      <button
+        key={square}
+        onClick={() => handleSquareClick(square)}
+        className={`
+          w-full h-full flex items-center justify-center text-4xl md:text-5xl lg:text-6xl
+          transition-all duration-200 relative
+          ${isLight ? `bg-gradient-to-br ${lightColor}` : `bg-gradient-to-br ${darkColor}`}
+          ${isSelected ? 'ring-4 ring-yellow-300 scale-95' : ''}
+          ${isPossibleMove ? 'ring-2 ring-white' : ''}
+          hover:scale-95 active:scale-90
+        `}
+      >
+        {piece && (
+          <span className={`drop-shadow-lg ${piece.color === 'w' ? 'text-white' : 'text-gray-900'}`}>
+            {PIECE_SYMBOLS[piece.color + piece.type]}
+          </span>
+        )}
+        {isPossibleMove && !piece && (
+          <div className="absolute w-3 h-3 bg-white rounded-full opacity-60" />
+        )}
+      </button>
+    );
+  };
+
+  const board = [];
+  for (let i = 0; i < 8; i++) {
+    const row = [];
+    for (let j = 0; j < 8; j++) {
+      const square = String.fromCharCode(97 + j) + (8 - i);
+      const piece = game.get(square);
+      row.push(renderSquare(square, piece, i, j));
+    }
+    board.push(
+      <div key={i} className="grid grid-cols-8 w-full aspect-[8/1]">
+        {row}
+      </div>
+    );
+  }
 
   return (
-    <div className="relative h-[100dvh] w-full overflow-hidden bg-black text-white">
-      {/* Enhanced animated aurora background layers */}
-      <div className="absolute inset-0 bg-aurora-layer-1" />
-      <div className="absolute inset-0 bg-aurora-layer-2" />
-      <div className="absolute inset-0 bg-aurora-layer-3" />
-      
-      {/* Floating particles overlay */}
-      <div className="absolute inset-0 bg-particles" />
-      
-      {/* Main content - centered */}
-      <main className="relative z-10 h-full flex flex-col items-center justify-center px-6">
-        <h1 className="text-center text-[clamp(28px,6vw,64px)] font-medium tracking-tight mb-4">
-          Turn Chats into Apps
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
+      <div className="max-w-2xl w-full">
+        <h1 className="text-4xl md:text-5xl font-bold text-white text-center mb-6 drop-shadow-lg">
+          Colorful Chess
         </h1>
         
-        {/* Rotating slogans */}
-        <div className="mt-4 h-8 md:h-10 overflow-hidden flex items-center justify-center">
-          <span
-            className={`inline-block text-center text-[clamp(18px,3vw,32px)] font-light transition-all duration-[400ms] ease-in-out ${
-              isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
-            }`}
-          >
-            {slogans[currentIndex]}
-          </span>
-        </div>
-      </main>
-      
-      {/* Start Prompting arrow pointing left - bottom left */}
-      <div className="absolute left-6 md:left-8 bottom-[5%] z-20 flex items-center gap-3 arrow-point-left">
-        <div className="flex items-center gap-2 text-white/80 font-medium text-sm md:text-base">
-          <svg 
-            className="w-5 h-5 md:w-6 md:h-6 animate-bounce-horizontal" 
-            fill="none" 
-            viewBox="0 0 24 24" 
-            stroke="currentColor"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          <span>Start prompting</span>
+        <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 md:p-6 shadow-2xl">
+          <div className="aspect-square w-full rounded-lg overflow-hidden shadow-2xl border-4 border-white/20">
+            {board}
+          </div>
+          
+          <div className="mt-6 flex flex-col items-center gap-4">
+            {gameOver && (
+              <div className="text-2xl md:text-3xl font-bold text-white text-center animate-pulse">
+                {winner}
+              </div>
+            )}
+            
+            <button
+              onClick={resetGame}
+              className="px-8 py-3 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-bold rounded-full
+                       hover:from-pink-600 hover:to-purple-700 transform hover:scale-105 active:scale-95
+                       transition-all duration-200 shadow-lg"
+            >
+              New Game
+            </button>
+            
+            <div className="text-white/80 text-center text-sm md:text-base">
+              {game.turn() === 'w' ? "Your turn (White)" : "Computer's turn (Black)"}
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
