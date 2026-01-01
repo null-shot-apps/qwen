@@ -1,16 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Chess } from 'chess.js';
-
-type Square = string;
-type PieceType = 'p' | 'n' | 'b' | 'r' | 'q' | 'k';
-type PieceColor = 'w' | 'b';
-
-interface ChessPiece {
-  type: PieceType;
-  color: PieceColor;
-}
+import { useState } from 'react';
+import { Chess, Square, Piece, Move } from 'chess.js';
 
 const PIECE_SYMBOLS: Record<string, string> = {
   'wp': '♙', 'wn': '♘', 'wb': '♗', 'wr': '♖', 'wq': '♕', 'wk': '♔',
@@ -50,7 +41,7 @@ export default function ChessGame() {
       const move = {
         from: selectedSquare,
         to: square,
-        promotion: 'q'
+        promotion: 'q' as const
       };
       
       try {
@@ -74,11 +65,11 @@ export default function ChessGame() {
             setGame(computerGame);
           }, 300);
         }
-      } catch (e) {
+      } catch {
         if (piece && piece.color === 'w') {
           setSelectedSquare(square);
-          const moves = game.moves({ square, verbose: true });
-          setPossibleMoves(moves.map(m => m.to));
+          const verboseMoves = game.moves({ verbose: true, square: square }) as Move[];
+          setPossibleMoves(verboseMoves.map(m => m.to));
         } else {
           setSelectedSquare(null);
           setPossibleMoves([]);
@@ -87,8 +78,8 @@ export default function ChessGame() {
     } else {
       if (piece && piece.color === 'w') {
         setSelectedSquare(square);
-        const moves = game.moves({ square, verbose: true });
-        setPossibleMoves(moves.map(m => m.to));
+        const verboseMoves = game.moves({ verbose: true, square: square }) as Move[];
+        setPossibleMoves(verboseMoves.map(m => m.to));
       }
     }
   };
@@ -101,7 +92,7 @@ export default function ChessGame() {
     setWinner('');
   };
 
-  const renderSquare = (square: Square, piece: ChessPiece | null, rowIndex: number, colIndex: number) => {
+  const renderSquare = (square: Square, piece: Piece | undefined, rowIndex: number, colIndex: number) => {
     const isLight = (rowIndex + colIndex) % 2 === 0;
     const isSelected = selectedSquare === square;
     const isPossibleMove = possibleMoves.includes(square);
@@ -149,7 +140,7 @@ export default function ChessGame() {
   for (let i = 0; i < 8; i++) {
     const row = [];
     for (let j = 0; j < 8; j++) {
-      const square = String.fromCharCode(97 + j) + (8 - i);
+      const square = (String.fromCharCode(97 + j) + (8 - i)) as Square;
       const piece = game.get(square);
       row.push(renderSquare(square, piece, i, j));
     }
@@ -197,4 +188,3 @@ export default function ChessGame() {
     </div>
   );
 }
-
